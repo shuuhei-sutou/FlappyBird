@@ -20,10 +20,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
     let groundCategory: UInt32 = 1 << 1
     let wallCategory: UInt32 = 1 << 2
     let scoreCategory: UInt32 = 1 << 3
+    let itemScoreCategory: UInt32 = 1 << 4
     
     var score = 0
+    var item_score = 0
     var scoreLabelNode:SKLabelNode!
     var bestScoreLabelNode:SKLabelNode!
+    var itemScoreScoreLabelNode:SKLabelNode!
     let userDefaults:UserDefaults = UserDefaults.standard
     
     override func didMove(to view: SKView) {
@@ -75,45 +78,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
             coin.zPosition = -50.0 // 雲より手前、地面より奥
             
             // 画面のY軸の中央値
-            let center_y = self.frame.size.height / 2
+            //            let center_y = self.frame.size.height / 2
             // 壁のY座標を上下ランダムにさせるときの最大値
-            let random_y_range = self.frame.size.height / 4
+            //            let random_y_range = self.frame.size.height / 4
             // 下の壁のY軸の下限
-            let under_coin_lowest_y = UInt32( center_y - coinTexture.size().height / 2 -  random_y_range / 2)
+            //            let under_coin_lowest_y = UInt32( center_y - coinTexture.size().height / 2 -  random_y_range / 2)
             // 1〜random_y_rangeまでのランダムな整数を生成
-            let random_y = arc4random_uniform( UInt32(random_y_range) )
+            //            let random_y = arc4random_uniform( UInt32(random_y_range) )
             // Y軸の下限にランダムな値を足して、下の壁のY座標を決定
-            let under_coin_y = CGFloat(under_coin_lowest_y + random_y)
+            //            let under_coin_y = CGFloat(under_coin_lowest_y + random_y)
             
             // キャラが通り抜ける隙間の長さ
-            let slit_length = self.frame.size.height / 6
+            //            let slit_length = self.frame.size.height / 6
             
             // 下側の壁を作成
             let under = SKSpriteNode(texture: coinTexture)
+            let under_x = arc4random_uniform(100)
+            let under_y = arc4random_uniform(500)
             
+            under.position = CGPoint(x: CGFloat(under_x), y: CGFloat(under_y))
+            coin.addChild(under)
             
-            for i in 0..<7 {
-                let under_x = arc4random_uniform(500)
-                let under_y = arc4random_uniform(500)
-                under.position = CGPoint(x: CGFloat(under_x), y: CGFloat(under_y))
-                coin.addChild(under)
-                
-            }
-            
-            coin.run(coinAnimation)
-            
-            self.coinNode.addChild(coin)
-            
+            coin.physicsBody?.categoryBitMask = self.itemScoreCategory
+            coin.physicsBody?.isDynamic = false
             
             // 上側の壁を作成
-  /*          let upper = SKSpriteNode(texture: coinTexture)
-            upper.position = CGPoint(x: 0.0, y: under_coin_y + coinTexture.size().height + slit_length)
-            
-            coin.addChild(upper)
-            coin.run(coinAnimation)
+            /*           let upper = SKSpriteNode(texture: coinTexture)
+             upper.position = CGPoint(x: 0.0, y: under_coin_y + coinTexture.size().height + slit_length)
+             
+             coin.addChild(upper)
+             */           coin.run(coinAnimation)
             
             self.coinNode.addChild(coin)
- */
         })
         
         // 次の壁作成までの待ち時間のアクションを作成
@@ -144,6 +140,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
         let bestScore = userDefaults.integer(forKey: "BEST")
         bestScoreLabelNode.text = "Best Score:\(bestScore)"
         self.addChild(bestScoreLabelNode)
+        
+        item_score = 0
+        itemScoreScoreLabelNode = SKLabelNode()
+        itemScoreScoreLabelNode.fontColor = UIColor.black
+        itemScoreScoreLabelNode.position = CGPoint(x: 10, y: self.frame.size.height - 120)
+        itemScoreScoreLabelNode.zPosition = 100 // 一番手前に表示する
+        itemScoreScoreLabelNode.horizontalAlignmentMode = SKLabelHorizontalAlignmentMode.left
+        itemScoreScoreLabelNode.text = "ItemScore:\(item_score)"
+        self.addChild(itemScoreScoreLabelNode)
     }
     
     func setupGround(){
@@ -287,8 +292,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
         bird.physicsBody?.allowsRotation = false
         
         bird.physicsBody?.categoryBitMask = birdCategory
-        bird.physicsBody?.collisionBitMask = groundCategory | wallCategory
-        bird.physicsBody?.contactTestBitMask = groundCategory | wallCategory
+        bird.physicsBody?.collisionBitMask = groundCategory | wallCategory | itemScoreCategory
+        bird.physicsBody?.contactTestBitMask = groundCategory | wallCategory | itemScoreCategory
         
         bird.run(flap)
         
@@ -321,11 +326,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
     }
     
     func didBegin(_ contact: SKPhysicsContact) {
+        
+        var firstBody, secondBody: SKPhysicsBody
+        
+        // firstを赤、secondを緑とする。
+        if contact.bodyA.categoryBitMask < contact.bodyB.categoryBitMask {
+            firstBody = contact.bodyA
+            secondBody = contact.bodyB
+        } else {
+            firstBody = contact.bodyB
+            secondBody = contact.bodyA
+        }
+        
         if scrollNode.speed <= 0{
             return
         }
         
-        if(contact.bodyA.categoryBitMask & scoreCategory) == scoreCategory || (contact.bodyB.categoryBitMask & scoreCategory) == scoreCategory {
+        if(firstBody.categoryBitMask & scoreCategory) == scoreCategory || (secondBody.categoryBitMask & scoreCategory) == scoreCategory {
             
             print("ScoreUp")
             score += 1
@@ -338,7 +355,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
                 userDefaults.set(bestScore, forKey: "BEST")
                 userDefaults.synchronize()
             }
-        }else{
+        }else if (firstBody.categoryBitMask == birdCategory)  &&
+            (secondBody.categoryBitMask == itemScoreCategory)  {
+            secondBody.node?.removeFromParent()
+            print("coin")
+        }
+        else{
             print("GameOver")
             
             scrollNode.speed = 0

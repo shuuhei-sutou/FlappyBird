@@ -8,6 +8,7 @@
 
 import UIKit
 import SpriteKit
+import AudioToolbox
 
 class GameScene: SKScene, SKPhysicsContactDelegate{
     
@@ -15,6 +16,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
     var wallNode:SKNode!
     var bird:SKSpriteNode!
     var coinNode:SKNode!
+    
+    var soundIdRing:SystemSoundID = 0
     
     let birdCategory: UInt32 = 1 << 0
     let groundCategory: UInt32 = 1 << 1
@@ -77,37 +80,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
             coin.position = CGPoint(x: self.frame.size.width + coinTexture.size().width / 2, y: 0.0)
             coin.zPosition = -50.0 // 雲より手前、地面より奥
             
-            // 画面のY軸の中央値
-            //            let center_y = self.frame.size.height / 2
-            // 壁のY座標を上下ランダムにさせるときの最大値
-            //            let random_y_range = self.frame.size.height / 4
-            // 下の壁のY軸の下限
-            //            let under_coin_lowest_y = UInt32( center_y - coinTexture.size().height / 2 -  random_y_range / 2)
-            // 1〜random_y_rangeまでのランダムな整数を生成
-            //            let random_y = arc4random_uniform( UInt32(random_y_range) )
-            // Y軸の下限にランダムな値を足して、下の壁のY座標を決定
-            //            let under_coin_y = CGFloat(under_coin_lowest_y + random_y)
-            
-            // キャラが通り抜ける隙間の長さ
-            //            let slit_length = self.frame.size.height / 6
-            
-            // 下側の壁を作成
-            let under = SKSpriteNode(texture: coinTexture)
+            let coins = SKSpriteNode(texture: coinTexture)
             let under_x = arc4random_uniform(100)
             let under_y = arc4random_uniform(500)
             
-            under.position = CGPoint(x: CGFloat(under_x), y: CGFloat(under_y))
-            coin.addChild(under)
+            coins.position = CGPoint(x: CGFloat(under_x), y: CGFloat(under_y))
+            coin.addChild(coins)
             
-            coin.physicsBody?.categoryBitMask = self.itemScoreCategory
-            coin.physicsBody?.isDynamic = false
+            coins.physicsBody = SKPhysicsBody(circleOfRadius: coins.size.height / 2.0)
+            coins.physicsBody?.categoryBitMask = self.itemScoreCategory
+            coins.physicsBody?.isDynamic = false
             
-            // 上側の壁を作成
-            /*           let upper = SKSpriteNode(texture: coinTexture)
-             upper.position = CGPoint(x: 0.0, y: under_coin_y + coinTexture.size().height + slit_length)
-             
-             coin.addChild(upper)
-             */           coin.run(coinAnimation)
+            coin.run(coinAnimation)
             
             self.coinNode.addChild(coin)
         })
@@ -302,11 +286,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
     
     func restart(){
         score = 0
+        item_score = 0
         scoreLabelNode.text = String("Score:\(score)")
+        itemScoreScoreLabelNode.text = "ItemScore:\(item_score)"
         
         bird.position = CGPoint(x: self.frame.size.width * 0.2, y:self.frame.size.height * 0.7)
         bird.physicsBody?.velocity = CGVector.zero
-        bird.physicsBody?.collisionBitMask = groundCategory | wallCategory
+        bird.physicsBody?.collisionBitMask = groundCategory | wallCategory | itemScoreCategory
         bird.zRotation = 0.0
         
         wallNode.removeAllChildren()
@@ -323,6 +309,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
         }else if bird.speed == 0{
             restart()
         }
+    }
+    
+    func playSound() {
+        let url = Bundle.main.url(forResource: "itemgetsea", withExtension: "mp3")!
+        var soundID: SystemSoundID = 0
+        AudioServicesCreateSystemSoundID(url as CFURL, &soundID)
+        AudioServicesPlaySystemSound(soundID)
     }
     
     func didBegin(_ contact: SKPhysicsContact) {
@@ -358,7 +351,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate{
         }else if (firstBody.categoryBitMask == birdCategory)  &&
             (secondBody.categoryBitMask == itemScoreCategory)  {
             secondBody.node?.removeFromParent()
-            print("coin")
+            print("CoinUp")
+            item_score += 1
+            itemScoreScoreLabelNode.text = "ItemScore:\(item_score)"
+            playSound()
         }
         else{
             print("GameOver")
